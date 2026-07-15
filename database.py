@@ -41,6 +41,7 @@ def init_db():
     # 初始化默认设置
     defaults = {
         "current_index": "-1",
+        "current_grp": "",
         "opacity": "85",
         "prev_keys": "Ctrl,Up",
         "next_keys": "Ctrl,Down",
@@ -66,17 +67,17 @@ def get_all_items() -> List[ClipItem]:
     ) for row in rows]
 
 
-def add_item(content: str, comment: str = "") -> ClipItem:
+def add_item(content: str, comment: str = "", grp: str = "") -> ClipItem:
     conn = _get_conn()
     item_id = str(uuid.uuid4())
     now = int(time.time())
     conn.execute(
-        "INSERT INTO items(id, content, comment, created_at) VALUES(?, ?, ?, ?)",
-        (item_id, content, comment, now)
+        "INSERT INTO items(id, grp, content, comment, created_at) VALUES(?, ?, ?, ?, ?)",
+        (item_id, grp, content, comment, now)
     )
     conn.commit()
     conn.close()
-    return ClipItem(id=item_id, content=content, comment=comment, created_at=now)
+    return ClipItem(id=item_id, grp=grp, content=content, comment=comment, created_at=now)
 
 
 def delete_item(item_id: str):
@@ -105,6 +106,7 @@ def get_settings() -> AppSettings:
     kv = {row["key"]: row["value"] for row in rows}
     return AppSettings(
         current_index=int(kv.get("current_index", "-1")),
+        current_grp=kv.get("current_grp", ""),
         opacity=int(kv.get("opacity", "85")),
         prev_keys=kv.get("prev_keys", "Ctrl,Up"),
         next_keys=kv.get("next_keys", "Ctrl,Down"),

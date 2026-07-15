@@ -1,7 +1,7 @@
 """主窗口 — 无边框、置顶、隐藏任务栏、居中于屏幕顶部"""
 
 from PySide6.QtWidgets import QWidget, QVBoxLayout
-from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve, QTimer
+from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve
 from PySide6.QtGui import QGuiApplication
 
 from ui.bar_widget import BarWidget
@@ -38,6 +38,7 @@ class MainWindow(QWidget):
         self._settings = get_settings()
         self._items = get_all_items()
         self._expanded = False
+        self._current_grp = self._settings.current_grp  # 当前分组筛选
 
         # 创建 UI
         self._setup_ui()
@@ -87,9 +88,8 @@ class MainWindow(QWidget):
         self.bar.close_clicked.connect(self._on_close)
         self.bar.double_clicked.connect(self._toggle_expand)
 
-        # 横条 → 提示条
-        self.bar.hover_enter.connect(lambda: self._show_tooltip())
-        self.bar.hover_leave.connect(lambda: self._schedule_tooltip_hide())
+        # 横条 → 分组切换
+        self.bar.group_changed.connect(self._on_group_changed)
 
         # 抽屉 → 条目变更
         self.drawer.items_tab.item_added.connect(self._on_item_added)
@@ -166,27 +166,52 @@ class MainWindow(QWidget):
 
     # ==================== 导航 ====================
 
+    def _get_filtered_indices(self):
+        """返回当前分组下的全局索引列表"""
+        if not self._current_grp or self._current_grp == "全部":
+            return list(range(len(self._items)))
+        result = []
+        for i, item in enumerate(self._items):
+            grp = item.grp if item.grp else "其他"
+            if grp == self._current_grp:
+                result.append(i)
+        return result
+
     def _prev_item(self):
-        """切换到上一条"""
+        """切换到上一条（分组内循环）"""
         if not self._items:
             return
+        indices = self._get_filtered_indices()
+        if not indices:
+            return
         idx = self._settings.current_index
-        if idx <= 0:
-            idx = len(self._items) - 1
+        try:
+            pos = indices.index(idx)
+        except ValueError:
+            pos = 0
+        if pos <= 0:
+            pos = len(indices) - 1
         else:
-            idx -= 1
-        self._select_item(idx)
+            pos -= 1
+        self._select_item(indices[pos])
 
     def _next_item(self):
-        """切换到下一条"""
+        """切换到下一条（分组内循环）"""
         if not self._items:
             return
+        indices = self._get_filtered_indices()
+        if not indices:
+            return
         idx = self._settings.current_index
-        if idx >= len(self._items) - 1:
-            idx = 0
+        try:
+            pos = indices.index(idx)
+        except ValueError:
+            pos = -1
+        if pos >= len(indices) - 1:
+            pos = 0
         else:
-            idx += 1
-        self._select_item(idx)
+            pos += 1
+        self._select_item(indices[pos])
 
     def _select_item(self, idx: int):
         """选中指定索引的条目"""
@@ -201,28 +226,43 @@ class MainWindow(QWidget):
         copy_to_clipboard(item.content)
         # 显示 Toast
         self.bar.show_toast("已复制")
-        # 显示提示条
-        self._show_tooltip()
-        self._schedule_tooltip_hide()
 
     # ==================== 显示刷新 ====================
 
     def _refresh_bar(self):
-        """刷新横条显示"""
-        total = len(self._items)
+        """刷新横条显示（分组过滤后的 index）"""
+        indices = self._get_filtered_indices()
+        total = len(indices)
         idx = self._settings.current_index
+
         if total == 0:
             self.bar.set_index(-1, 0)
             self.bar.set_content("暂无内容 — 双击添加", "")
             return
-        self.bar.set_index(idx, total)
-        item = self._items[idx] if 0 <= idx < total else self._items[0]
+
+        # 确保 current_index 在过滤范围内
+        if idx not in indices:
+            idx = indices[0]
+            self._settings.current_index = idx
+            set_setting("current_index", str(idx))
+
+        pos = indices.index(idx)
+        self.bar.set_index(pos, total)
+        item = self._items[idx]
         self.bar.set_content(item.content, item.comment)
+
+        # 更新 bar 的分组下拉框
+        group_list = self._compute_group_list()
+        self.bar.set_groups(group_list, self._current_grp or "全部")
 
     def _refresh_list(self):
         """刷新条目列表"""
         self._items = get_all_items()
-        self.drawer.items_tab.refresh(self._items, self._settings.current_index)
+        group_list = self._compute_group_list()
+        self.drawer.items_tab.refresh(
+            self._items, self._settings.current_index,
+            groups=group_list, current_grp=self._current_grp
+        )
 
     def _init_settings_tab(self):
         """初始化设置标签页的值"""
@@ -231,40 +271,48 @@ class MainWindow(QWidget):
         self.drawer.settings_tab.set_hotkeys(s.prev_keys, s.next_keys)
         self.drawer.settings_tab.set_theme(s.theme)
 
-    # ==================== 提示条 ====================
+    # ==================== 分组 ====================
 
-    _tooltip_timer: QTimer | None = None
+    def _compute_group_list(self):
+        """从所有条目中提取分组列表"""
+        groups = set()
+        for item in self._items:
+            groups.add(item.grp if item.grp else "其他")
+        return ["全部"] + sorted(groups)
 
-    def _show_tooltip(self):
-        """显示提示条"""
-        if self._tooltip_timer:
-            self._tooltip_timer.stop()
-        total = len(self._items)
-        idx = self._settings.current_index
-        if total == 0 or idx < 0:
-            return
-        item = self._items[idx]
-        self.bar.show_tooltip(item.content, item.comment)
+    def _on_group_changed(self, grp: str):
+        """分组下拉框切换"""
+        self._current_grp = grp
+        self._settings.current_grp = grp
+        set_setting("current_grp", grp)
 
-    def _schedule_tooltip_hide(self):
-        """2.5s 后隐藏提示条"""
-        if self._tooltip_timer:
-            self._tooltip_timer.stop()
-        self._tooltip_timer = QTimer(self)
-        self._tooltip_timer.setSingleShot(True)
-        self._tooltip_timer.timeout.connect(self.bar.hide_tooltip)
-        self._tooltip_timer.start(2500)
+        # 自动选中该分组的第一条
+        indices = self._get_filtered_indices()
+        if indices:
+            if self._settings.current_index not in indices:
+                self._settings.current_index = indices[0]
+                set_setting("current_index", str(indices[0]))
+        else:
+            self._settings.current_index = -1
+            set_setting("current_index", "-1")
+
+        self._refresh_bar()
 
     # ==================== 条目操作 ====================
 
-    def _on_item_added(self, content: str, comment: str):
+    def _on_item_added(self, content: str, comment: str, grp: str):
         from database import add_item
-        add_item(content, comment)
+        add_item(content, comment, grp)
         self._items = get_all_items()
         # 如果之前没有条目，自动选中新条目
         if self._settings.current_index < 0 and self._items:
             self._settings.current_index = 0
             set_setting("current_index", "0")
+        # 验证当前索引在分组内有效
+        indices = self._get_filtered_indices()
+        if indices and self._settings.current_index not in indices:
+            self._settings.current_index = indices[0]
+            set_setting("current_index", str(indices[0]))
         self._refresh_bar()
         self._refresh_list()
 

@@ -86,6 +86,33 @@ QPushButton:pressed {
     color: #666680;
 }
 
+/* ===== 分组下拉框 ===== */
+QComboBox {
+    background-color: #1a1a2e;
+    color: #d0d0e0;
+    border: 1px solid #3a3a50;
+    border-radius: 3px;
+    padding: 2px 6px;
+    min-width: 70px;
+    font-size: 11px;
+}
+QComboBox:hover {
+    border-color: #4a7cf7;
+}
+QComboBox::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 16px;
+    border-left: 1px solid #3a3a50;
+}
+QComboBox QAbstractItemView {
+    background-color: #1e1e2e;
+    color: #d0d0e0;
+    border: 1px solid #3a3a50;
+    selection-background-color: #4a7cf7;
+    outline: none;
+}
+
 /* ===== 抽屉面板 ===== */
 #drawerWidget {
     background-color: #1e1e2e;
@@ -132,6 +159,10 @@ QLineEdit, QTextEdit {
 
 QLineEdit:focus, QTextEdit:focus {
     border-color: #4a7cf7;
+}
+
+#searchEdit {
+    margin: 0 0 2px 0;
 }
 
 QScrollArea {
@@ -183,16 +214,6 @@ QSlider::handle:horizontal {
 
 QSlider::handle:horizontal:hover {
     background-color: #5a8cf7;
-}
-
-/* ===== 提示条 / Tooltip ===== */
-#tooltipWidget {
-    background-color: #2a2a3c;
-    color: #d0d0e0;
-    border: 1px solid #4a7cf7;
-    border-radius: 4px;
-    padding: 8px 12px;
-    font-size: 13px;
 }
 
 QToolTip {
@@ -344,6 +365,33 @@ QPushButton:pressed {
     color: #9999a0;
 }
 
+/* ===== 分组下拉框 ===== */
+QComboBox {
+    background-color: #ffffff;
+    color: #333340;
+    border: 1px solid #d0d0d8;
+    border-radius: 3px;
+    padding: 2px 6px;
+    min-width: 70px;
+    font-size: 11px;
+}
+QComboBox:hover {
+    border-color: #4a7cf7;
+}
+QComboBox::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 16px;
+    border-left: 1px solid #d0d0d8;
+}
+QComboBox QAbstractItemView {
+    background-color: #ffffff;
+    color: #333340;
+    border: 1px solid #d0d0d8;
+    selection-background-color: #4a7cf7;
+    outline: none;
+}
+
 /* ===== 抽屉面板 ===== */
 #drawerWidget {
     background-color: #f0f0f5;
@@ -390,6 +438,10 @@ QLineEdit, QTextEdit {
 
 QLineEdit:focus, QTextEdit:focus {
     border-color: #4a7cf7;
+}
+
+#searchEdit {
+    margin: 0 0 2px 0;
 }
 
 QScrollArea {
@@ -441,16 +493,6 @@ QSlider::handle:horizontal {
 
 QSlider::handle:horizontal:hover {
     background-color: #3a6ce7;
-}
-
-/* ===== 提示条 / Tooltip ===== */
-#tooltipWidget {
-    background-color: #ffffff;
-    color: #333340;
-    border: 1px solid #4a7cf7;
-    border-radius: 4px;
-    padding: 8px 12px;
-    font-size: 13px;
 }
 
 QToolTip {

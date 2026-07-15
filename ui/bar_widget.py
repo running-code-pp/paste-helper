@@ -1,10 +1,11 @@
 """横条组件 — 导航按钮、索引、内容显示、展开/收起、关闭"""
 
 from PySide6.QtWidgets import (
-    QWidget, QHBoxLayout, QLabel, QPushButton, QFrame
+    QWidget, QHBoxLayout, QLabel, QPushButton, QFrame, QComboBox
 )
 from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtGui import QFont
+from typing import List
 
 
 class BarWidget(QWidget):
@@ -20,6 +21,9 @@ class BarWidget(QWidget):
     hover_enter = Signal()
     hover_leave = Signal()
 
+    # 分组切换信号
+    group_changed = Signal(str)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("barWidget")
@@ -28,6 +32,17 @@ class BarWidget(QWidget):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(6, 2, 6, 2)
         layout.setSpacing(2)
+
+        # 0. 分组下拉框
+        self.group_combo = QComboBox()
+        self.group_combo.setObjectName("groupCombo")
+        self.group_combo.setToolTip("选择分组")
+        self.group_combo.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.group_combo.setEditable(False)
+        self.group_combo.setMinimumWidth(65)
+        self.group_combo.setMaximumWidth(90)
+        self.group_combo.currentTextChanged.connect(self._on_combo_changed)
+        layout.addWidget(self.group_combo)
 
         # 1. ◀ 按钮
         self.prev_btn = QPushButton("◀")
@@ -77,16 +92,6 @@ class BarWidget(QWidget):
         self.close_btn.clicked.connect(self.close_clicked.emit)
         layout.addWidget(self.close_btn)
 
-        # ===== 提示条 =====
-        self._tooltip = QLabel(self)
-        self._tooltip.setObjectName("tooltipWidget")
-        self._tooltip.setWindowFlags(
-            Qt.WindowType.ToolTip | Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint
-        )
-        self._tooltip.setVisible(False)
-        self._tooltip.setMaximumWidth(400)
-        self._tooltip.setWordWrap(True)
-
         # ===== Toast =====
         self._toast = QLabel(self)
         self._toast.setObjectName("toastLabel")
@@ -125,25 +130,21 @@ class BarWidget(QWidget):
         self.expand_btn.setText("▲" if expanded else "▼")
         self.expand_btn.setToolTip("收起面板" if expanded else "展开面板")
 
-    # ==================== 提示条 ====================
+    # ==================== 分组下拉框 ====================
 
-    def show_tooltip(self, content: str, comment: str):
-        text = content
-        if comment:
-            text += f"\n\n📝 {comment}"
-        text += "\n\nCtrl+C 快捷复制"
-        self._tooltip.setText(text)
-        self._tooltip.adjustSize()
+    def set_groups(self, groups: List[str], current: str):
+        """填充分组选项并选中 current"""
+        self.group_combo.blockSignals(True)
+        self.group_combo.clear()
+        if groups:
+            self.group_combo.addItems(groups)
+        self.group_combo.setCurrentText(current)
+        self.group_combo.blockSignals(False)
 
-        # 定位于横条下方
-        pos = self.mapToGlobal(self.rect().bottomLeft())
-        pos.setX(pos.x() + 10)
-        pos.setY(pos.y() + 4)
-        self._tooltip.move(pos)
-        self._tooltip.setVisible(True)
-
-    def hide_tooltip(self):
-        self._tooltip.setVisible(False)
+    def _on_combo_changed(self, text: str):
+        """分组切换"""
+        if text:
+            self.group_changed.emit(text)
 
     # ==================== Toast ====================
 
@@ -186,7 +187,7 @@ class BarWidget(QWidget):
         super().resizeEvent(event)
         # 截断内容
         w = self.width()
-        available = w - 200  # 减去按钮等占用的宽度
+        available = w - 280  # 减去按钮和下拉框占用的宽度
         self.content_lbl.setMaximumWidth(max(60, available))
         # 文本截断
         self._truncate_content()

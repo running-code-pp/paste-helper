@@ -18,6 +18,7 @@ class ClipItem:
 class AppSettings:
     """应用设置"""
     current_index: int = -1
+    current_grp: str = ""     # 当前选中的分组，"" = 全部
     opacity: int = 85        # 10-100
     prev_keys: str = "Ctrl,Up"
     next_keys: str = "Ctrl,Down"
