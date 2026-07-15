@@ -23,6 +23,8 @@ class AppSettings:
     prev_keys: str = "Ctrl,Up"
     next_keys: str = "Ctrl,Down"
     theme: str = "dark"       # "dark" | "light"
+    window_width: int = 420   # 窗口宽度
+    auto_collapse: bool = False  # 点击复制后自动收起面板
 
     @classmethod
     def defaults(cls) -> "AppSettings":

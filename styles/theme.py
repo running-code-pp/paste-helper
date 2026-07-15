@@ -86,6 +86,29 @@ QPushButton:pressed {
     color: #666680;
 }
 
+/* ===== 复选框 / 单选框 ===== */
+QCheckBox, QRadioButton {
+    color: #d0d0e0;
+    spacing: 6px;
+}
+QCheckBox::indicator, QRadioButton::indicator {
+    width: 16px;
+    height: 16px;
+}
+QCheckBox::indicator:unchecked, QRadioButton::indicator:unchecked {
+    border: 1px solid #4a4a60;
+    border-radius: 3px;
+    background-color: #1a1a2e;
+}
+QCheckBox::indicator:checked, QRadioButton::indicator:checked {
+    border: 1px solid #4a7cf7;
+    border-radius: 3px;
+    background-color: #4a7cf7;
+}
+QCheckBox::indicator:hover, QRadioButton::indicator:hover {
+    border-color: #4a7cf7;
+}
+
 /* ===== 分组下拉框 ===== */
 QComboBox {
     background-color: #1a1a2e;
@@ -363,6 +386,29 @@ QPushButton:pressed {
 #addBtn:disabled {
     background-color: #d0d0d8;
     color: #9999a0;
+}
+
+/* ===== 复选框 / 单选框 ===== */
+QCheckBox, QRadioButton {
+    color: #333340;
+    spacing: 6px;
+}
+QCheckBox::indicator, QRadioButton::indicator {
+    width: 16px;
+    height: 16px;
+}
+QCheckBox::indicator:unchecked, QRadioButton::indicator:unchecked {
+    border: 1px solid #c0c0c8;
+    border-radius: 3px;
+    background-color: #ffffff;
+}
+QCheckBox::indicator:checked, QRadioButton::indicator:checked {
+    border: 1px solid #4a7cf7;
+    border-radius: 3px;
+    background-color: #4a7cf7;
+}
+QCheckBox::indicator:hover, QRadioButton::indicator:hover {
+    border-color: #4a7cf7;
 }
 
 /* ===== 分组下拉框 ===== */

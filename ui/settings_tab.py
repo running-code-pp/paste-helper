@@ -2,7 +2,7 @@
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QSlider, QPushButton, QRadioButton
+    QSlider, QPushButton, QRadioButton, QCheckBox
 )
 from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtGui import QKeyEvent
@@ -144,6 +144,7 @@ class SettingsTab(QWidget):
     prev_keys_changed = Signal(str)     # "Ctrl,Up"
     next_keys_changed = Signal(str)     # "Ctrl,Down"
     theme_changed = Signal(str)         # "dark" | "light"
+    auto_collapse_changed = Signal(bool)  # 点击复制后自动收起
     exit_clicked = Signal()
 
     def __init__(self, parent=None):
@@ -231,6 +232,18 @@ class SettingsTab(QWidget):
         theme_row.addStretch()
         layout.addLayout(theme_row)
 
+        # ===== 分隔 =====
+        sep3 = QLabel()
+        sep3.setFixedHeight(1)
+        sep3.setStyleSheet("background-color: #3a3a50; border: none;")
+        layout.addWidget(sep3)
+
+        # ===== 点击后自动收起 =====
+        self.auto_collapse_cb = QCheckBox("点击复制后自动收起面板")
+        self.auto_collapse_cb.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.auto_collapse_cb.toggled.connect(self.auto_collapse_changed.emit)
+        layout.addWidget(self.auto_collapse_cb)
+
         layout.addStretch()
 
         # ===== 退出按钮 =====
@@ -261,6 +274,11 @@ class SettingsTab(QWidget):
             self.light_radio.setChecked(True)
         else:
             self.dark_radio.setChecked(True)
+
+    def set_auto_collapse(self, enabled: bool):
+        self.auto_collapse_cb.blockSignals(True)
+        self.auto_collapse_cb.setChecked(enabled)
+        self.auto_collapse_cb.blockSignals(False)
 
     # ===== 透明度 150ms 防抖 =====
     _pending_opacity = 85

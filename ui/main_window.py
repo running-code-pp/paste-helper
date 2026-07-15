@@ -1,7 +1,13 @@
 """主窗口 — 无边框、置顶、隐藏任务栏、居中于屏幕顶部"""
 
+import sys
+
+if sys.platform == "win32":
+    import ctypes
+    from ctypes.wintypes import MSG
+
 from PySide6.QtWidgets import QWidget, QVBoxLayout
-from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve
+from PySide6.QtCore import Qt, QVariantAnimation, QEasingCurve, QTimer
 from PySide6.QtGui import QGuiApplication
 
 from ui.bar_widget import BarWidget
@@ -14,8 +20,11 @@ from hotkey import HotkeyManager
 
 BAR_HEIGHT = 40
 DRAWER_HEIGHT = 400
-COLLAPSED_SIZE = (420, BAR_HEIGHT)
-EXPANDED_SIZE = (420, BAR_HEIGHT + DRAWER_HEIGHT)
+DEFAULT_WIDTH = 420
+MIN_WIDTH = 300
+_MAX_DIM = 16777215  # QWIDGETSIZE_MAX，不限制宽度
+COLLAPSED_SIZE = (DEFAULT_WIDTH, BAR_HEIGHT)
+EXPANDED_SIZE = (DEFAULT_WIDTH, BAR_HEIGHT + DRAWER_HEIGHT)
 
 
 class MainWindow(QWidget):
@@ -38,7 +47,14 @@ class MainWindow(QWidget):
         self._settings = get_settings()
         self._items = get_all_items()
         self._expanded = False
+        self._animating = False  # 动画进行中标记
         self._current_grp = self._settings.current_grp  # 当前分组筛选
+
+        # 宽度持久化：拖曳结束 500ms 后保存
+        self._save_width_timer = QTimer(self)
+        self._save_width_timer.setSingleShot(True)
+        self._save_width_timer.setInterval(500)
+        self._save_width_timer.timeout.connect(self._save_window_width)
 
         # 创建 UI
         self._setup_ui()
@@ -75,9 +91,11 @@ class MainWindow(QWidget):
         self.drawer.setVisible(False)
         layout.addWidget(self.drawer)
 
-        # 初始尺寸（不用 setFixedSize，用 resize 允许后续动画）
-        self.resize(*COLLAPSED_SIZE)
-        self.setMinimumSize(420, BAR_HEIGHT)
+        # 初始尺寸 — 优先使用上次保存的宽度
+        saved_w = self._settings.window_width
+        init_w = saved_w if saved_w and saved_w >= MIN_WIDTH else DEFAULT_WIDTH
+        self.resize(init_w, BAR_HEIGHT)
+        self.setMinimumSize(MIN_WIDTH, BAR_HEIGHT)
 
         # ---------- 信号连接 ----------
 
@@ -101,6 +119,7 @@ class MainWindow(QWidget):
         self.drawer.settings_tab.prev_keys_changed.connect(self._on_prev_keys_changed)
         self.drawer.settings_tab.next_keys_changed.connect(self._on_next_keys_changed)
         self.drawer.settings_tab.theme_changed.connect(self._on_theme_changed)
+        self.drawer.settings_tab.auto_collapse_changed.connect(self._on_auto_collapse_changed)
         self.drawer.settings_tab.exit_clicked.connect(self._on_close)
 
         # 刷新显示
@@ -122,6 +141,18 @@ class MainWindow(QWidget):
         win_opacity = max(0.1, self._settings.opacity / 100.0)
         self.setWindowOpacity(win_opacity)
 
+    # ==================== 窗口大小事件 ====================
+
+    def resizeEvent(self, event):
+        """窗口大小变化时，非动画状态下延迟保存宽度"""
+        super().resizeEvent(event)
+        if not self._animating:
+            self._save_width_timer.start()  # 防抖 500ms
+
+    def _save_window_width(self):
+        """持久化当前窗口宽度"""
+        set_setting("window_width", str(self.width()))
+
     # ==================== 位置 ====================
 
     def _center_on_screen(self):
@@ -129,9 +160,69 @@ class MainWindow(QWidget):
         screen = QGuiApplication.primaryScreen()
         if screen:
             geo = screen.availableGeometry()
-            x = geo.x() + (geo.width() - COLLAPSED_SIZE[0]) // 2
+            x = geo.x() + (geo.width() - self.width()) // 2
             y = geo.y() + 4  # 距顶部 4px
             self.move(x, y)
+
+    # ==================== 窗口拖曳调整大小 ====================
+
+    def nativeEvent(self, eventType, message):
+        """处理 Windows WM_NCHITTEST，为无边框窗口提供边缘拖曳调整大小"""
+        if sys.platform != "win32":
+            return False, 0
+
+        # WM_NCHITTEST 及边框常量
+        WM_NCHITTEST = 0x0084
+        HTLEFT = 10
+        HTRIGHT = 11
+        HTTOP = 12
+        HTTOPLEFT = 13
+        HTTOPRIGHT = 14
+        HTBOTTOM = 15
+        HTBOTTOMLEFT = 16
+        HTBOTTOMRIGHT = 17
+
+        msg = ctypes.cast(int(message), ctypes.POINTER(MSG)).contents
+
+        if msg.message != WM_NCHITTEST:
+            return False, 0
+
+        # 鼠标屏幕坐标
+        x = msg.pt.x
+        y = msg.pt.y
+
+        # 窗口屏幕坐标和尺寸
+        pos = self.mapToGlobal(self.rect().topLeft())
+        win_x = pos.x()
+        win_y = pos.y()
+        win_w = self.width()
+        win_h = self.height()
+
+        BORDER = 6  # 可拖曳边框宽度（像素）
+
+        on_left = x < win_x + BORDER
+        on_right = x > win_x + win_w - BORDER
+        on_top = y < win_y + BORDER
+        on_bottom = y > win_y + win_h - BORDER
+
+        if on_left and on_top:
+            return True, HTTOPLEFT
+        if on_left and on_bottom:
+            return True, HTBOTTOMLEFT
+        if on_right and on_top:
+            return True, HTTOPRIGHT
+        if on_right and on_bottom:
+            return True, HTBOTTOMRIGHT
+        if on_left:
+            return True, HTLEFT
+        if on_right:
+            return True, HTRIGHT
+        if on_top:
+            return True, HTTOP
+        if on_bottom:
+            return True, HTBOTTOM
+
+        return False, 0
 
     # ==================== 展开 / 收起 ====================
 
@@ -140,29 +231,35 @@ class MainWindow(QWidget):
         self._expanded = not self._expanded
         self.drawer.setVisible(self._expanded)
 
-        target_size = EXPANDED_SIZE if self._expanded else COLLAPSED_SIZE
+        target_h = EXPANDED_SIZE[1] if self._expanded else COLLAPSED_SIZE[1]
 
-        # 展开前先解除最大尺寸限制
-        if self._expanded:
-            self.setMaximumSize(420, EXPANDED_SIZE[1])
+        # 动画前解除高度限制
+        self.setMaximumSize(_MAX_DIM, _MAX_DIM)
 
-        # 动画（存为实例属性防止 GC 回收）
-        self._expand_anim = QPropertyAnimation(self, b"size")
+        # 使用 QVariantAnimation 只动画高度，宽度始终取 self.width()
+        self._animating = True
+        self._expand_anim = QVariantAnimation()
         self._expand_anim.setDuration(200)
-        self._expand_anim.setStartValue(self.size())
-        self._expand_anim.setEndValue(target_size)
+        self._expand_anim.setStartValue(self.height())
+        self._expand_anim.setEndValue(target_h)
         self._expand_anim.setEasingCurve(QEasingCurve.Type.InOutCubic)
+        self._expand_anim.valueChanged.connect(self._on_expand_step)
         self._expand_anim.finished.connect(self._on_expand_finished)
         self._expand_anim.start()
 
         # 更新展开按钮箭头
         self.bar.update_expand_state(self._expanded)
 
+    def _on_expand_step(self, h: int):
+        """动画每帧：只改高度，宽度保持不变"""
+        self.resize(self.width(), h)
+
     def _on_expand_finished(self):
-        """动画结束后锁定尺寸"""
+        """动画结束后锁定高度"""
+        self._animating = False
         target_h = EXPANDED_SIZE[1] if self._expanded else COLLAPSED_SIZE[1]
-        self.setMaximumSize(420, target_h)
-        self.resize(420, target_h)
+        self.setMaximumSize(_MAX_DIM, target_h)
+        self.resize(self.width(), target_h)
 
     # ==================== 导航 ====================
 
@@ -270,6 +367,7 @@ class MainWindow(QWidget):
         self.drawer.settings_tab.set_opacity(s.opacity)
         self.drawer.settings_tab.set_hotkeys(s.prev_keys, s.next_keys)
         self.drawer.settings_tab.set_theme(s.theme)
+        self.drawer.settings_tab.set_auto_collapse(s.auto_collapse)
 
     # ==================== 分组 ====================
 
@@ -333,6 +431,9 @@ class MainWindow(QWidget):
         if 0 <= idx < len(self._items):
             self._select_item(idx)
             self._refresh_list()
+            # 若开启"复制后自动收起"且当前处于展开状态，则自动收起
+            if self._settings.auto_collapse and self._expanded:
+                self._toggle_expand()
 
     # ==================== 设置操作 ====================
 
@@ -355,6 +456,10 @@ class MainWindow(QWidget):
         self._settings.theme = theme
         set_setting("theme", theme)
         self._apply_theme()
+
+    def _on_auto_collapse_changed(self, enabled: bool):
+        self._settings.auto_collapse = enabled
+        set_setting("auto_collapse", "1" if enabled else "0")
 
     # ==================== 快捷键 ====================
 

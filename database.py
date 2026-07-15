@@ -46,6 +46,8 @@ def init_db():
         "prev_keys": "Ctrl,Up",
         "next_keys": "Ctrl,Down",
         "theme": "dark",
+        "window_width": "420",
+        "auto_collapse": "0",
     }
     for k, v in defaults.items():
         conn.execute(
@@ -111,6 +113,8 @@ def get_settings() -> AppSettings:
         prev_keys=kv.get("prev_keys", "Ctrl,Up"),
         next_keys=kv.get("next_keys", "Ctrl,Down"),
         theme=kv.get("theme", "dark"),
+        window_width=int(kv.get("window_width", "420")),
+        auto_collapse=kv.get("auto_collapse", "0") == "1",
     )
 
 
