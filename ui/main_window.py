@@ -74,8 +74,9 @@ class MainWindow(QWidget):
         self.drawer.setVisible(False)
         layout.addWidget(self.drawer)
 
-        # 初始尺寸
-        self.setFixedSize(*COLLAPSED_SIZE)
+        # 初始尺寸（不用 setFixedSize，用 resize 允许后续动画）
+        self.resize(*COLLAPSED_SIZE)
+        self.setMinimumSize(420, BAR_HEIGHT)
 
         # ---------- 信号连接 ----------
 
@@ -137,24 +138,31 @@ class MainWindow(QWidget):
     def _toggle_expand(self):
         """切换抽屉展开/收起"""
         self._expanded = not self._expanded
-        target_h = EXPANDED_SIZE[1] if self._expanded else COLLAPSED_SIZE[1]
         self.drawer.setVisible(self._expanded)
 
-        # 动画
-        anim = QPropertyAnimation(self, b"size")
-        anim.setDuration(200)
-        anim.setStartValue(self.size())
-        anim.setEndValue(EXPANDED_SIZE if self._expanded else COLLAPSED_SIZE)
-        anim.setEasingCurve(QEasingCurve.Type.InOutCubic)
+        target_size = EXPANDED_SIZE if self._expanded else COLLAPSED_SIZE
 
-        def _on_finished():
-            self.setFixedSize(420, target_h)
+        # 展开前先解除最大尺寸限制
+        if self._expanded:
+            self.setMaximumSize(420, EXPANDED_SIZE[1])
 
-        anim.finished.connect(_on_finished)
-        anim.start()
+        # 动画（存为实例属性防止 GC 回收）
+        self._expand_anim = QPropertyAnimation(self, b"size")
+        self._expand_anim.setDuration(200)
+        self._expand_anim.setStartValue(self.size())
+        self._expand_anim.setEndValue(target_size)
+        self._expand_anim.setEasingCurve(QEasingCurve.Type.InOutCubic)
+        self._expand_anim.finished.connect(self._on_expand_finished)
+        self._expand_anim.start()
 
         # 更新展开按钮箭头
         self.bar.update_expand_state(self._expanded)
+
+    def _on_expand_finished(self):
+        """动画结束后锁定尺寸"""
+        target_h = EXPANDED_SIZE[1] if self._expanded else COLLAPSED_SIZE[1]
+        self.setMaximumSize(420, target_h)
+        self.resize(420, target_h)
 
     # ==================== 导航 ====================
 

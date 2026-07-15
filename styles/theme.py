@@ -88,7 +88,7 @@ QPushButton:pressed {
 
 /* ===== 抽屉面板 ===== */
 #drawerWidget {
-    background-color: #252538;
+    background-color: #1e1e2e;
     border: 1px solid #3a3a50;
     border-top: none;
     border-radius: 0 0 4px 4px;
@@ -96,7 +96,7 @@ QPushButton:pressed {
 
 QTabWidget::pane {
     border: none;
-    background-color: #252538;
+    background-color: #1e1e2e;
 }
 
 QTabBar::tab {
@@ -132,6 +132,17 @@ QLineEdit, QTextEdit {
 
 QLineEdit:focus, QTextEdit:focus {
     border-color: #4a7cf7;
+}
+
+QScrollArea {
+    background-color: #1e1e2e;
+    border: none;
+}
+QScrollArea > QWidget {
+    background-color: #1e1e2e;
+}
+#listContainer {
+    background-color: #1e1e2e;
 }
 
 /* ===== 滚动条 ===== */
@@ -209,19 +220,25 @@ QToolTip {
 
 /* ===== 条目列表项 ===== */
 #itemWidget {
-    background-color: #2a2a3c;
+    background-color: #1e1e2e;
     border-radius: 4px;
     padding: 6px 10px;
     margin: 2px 4px;
 }
 
 #itemWidget:hover {
-    background-color: #303045;
+    background-color: #2a2a3c;
 }
 
 #itemWidget[selected="true"] {
-    background-color: #35355a;
+    background-color: #2a2a3c;
     border-left: 3px solid #4a7cf7;
+}
+
+#itemWidget QLabel {
+    color: #8888a0;
+    border: none;
+    background: transparent;
 }
 
 /* ===== 快捷键捕获按钮 ===== */
@@ -329,7 +346,7 @@ QPushButton:pressed {
 
 /* ===== 抽屉面板 ===== */
 #drawerWidget {
-    background-color: #fafafa;
+    background-color: #f0f0f5;
     border: 1px solid #d0d0d8;
     border-top: none;
     border-radius: 0 0 4px 4px;
@@ -337,7 +354,7 @@ QPushButton:pressed {
 
 QTabWidget::pane {
     border: none;
-    background-color: #fafafa;
+    background-color: #f0f0f5;
 }
 
 QTabBar::tab {
@@ -373,6 +390,17 @@ QLineEdit, QTextEdit {
 
 QLineEdit:focus, QTextEdit:focus {
     border-color: #4a7cf7;
+}
+
+QScrollArea {
+    background-color: #f0f0f5;
+    border: none;
+}
+QScrollArea > QWidget {
+    background-color: #f0f0f5;
+}
+#listContainer {
+    background-color: #f0f0f5;
 }
 
 /* ===== 滚动条 ===== */
@@ -450,7 +478,7 @@ QToolTip {
 
 /* ===== 条目列表项 ===== */
 #itemWidget {
-    background-color: #f5f5fa;
+    background-color: #f0f0f5;
     border-radius: 4px;
     padding: 6px 10px;
     margin: 2px 4px;
@@ -463,6 +491,12 @@ QToolTip {
 #itemWidget[selected="true"] {
     background-color: #e0e5ff;
     border-left: 3px solid #4a7cf7;
+}
+
+#itemWidget QLabel {
+    color: #666680;
+    border: none;
+    background: transparent;
 }
 
 /* ===== 快捷键捕获按钮 ===== */

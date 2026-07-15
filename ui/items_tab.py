@@ -35,14 +35,11 @@ class ItemWidget(QFrame):
         if len(item.content) > 50:
             display += "…"
         lbl = QLabel(display)
-        lbl.setStyleSheet("border: none; background: transparent;")
         layout.addWidget(lbl, 1)
 
         if item.comment:
             comment_lbl = QLabel(f"📝{item.comment[:15]}")
-            comment_lbl.setStyleSheet(
-                "color: #8888a0; font-size: 11px; border: none; background: transparent;"
-            )
+            comment_lbl.setStyleSheet("font-size: 11px;")
             layout.addWidget(comment_lbl)
 
         # 删除按钮（默认隐藏）
@@ -110,6 +107,7 @@ class ItemsTab(QWidget):
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
         self.list_container = QWidget()
+        self.list_container.setObjectName("listContainer")
         self.list_layout = QVBoxLayout(self.list_container)
         self.list_layout.setContentsMargins(0, 0, 0, 0)
         self.list_layout.setSpacing(3)
