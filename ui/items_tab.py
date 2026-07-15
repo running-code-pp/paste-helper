@@ -1,6 +1,6 @@
 """条目标签页 — 添加表单 + 条目列表"""
 
-from typing import List
+from typing import Dict, List
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit,
     QPushButton, QScrollArea, QLabel, QFrame, QComboBox
@@ -12,15 +12,15 @@ from models import ClipItem
 class ItemWidget(QFrame):
     """单个条目展示"""
 
-    clicked = Signal(int)        # real_idx（原始索引）
+    clicked = Signal(str)         # item_id
     delete_clicked = Signal(str)  # item_id
 
-    def __init__(self, item: ClipItem, idx: int, real_idx: int, selected: bool, parent=None):
+    def __init__(self, item: ClipItem, idx: int, selected: bool,
+                 group_color: str = "", parent=None):
         super().__init__(parent)
         self.setObjectName("itemWidget")
         self._item = item
         self._idx = idx              # 过滤后的位置（用于显示序号和选中高亮）
-        self._real_idx = real_idx    # 原始索引（用于点击时通知 MainWindow）
 
         if selected:
             self.setProperty("selected", "true")
@@ -43,13 +43,21 @@ class ItemWidget(QFrame):
             comment_lbl.setStyleSheet("font-size: 11px;")
             layout.addWidget(comment_lbl)
 
-        # 分组标签
-        grp_display = item.grp if item.grp else "其他"
-        grp_lbl = QLabel(grp_display)
-        grp_lbl.setStyleSheet(
-            "font-size: 10px; color: #8888a0; background: transparent; "
-            "border: 1px solid #4a4a60; border-radius: 2px; padding: 0px 5px; margin-left: 2px;"
-        )
+        # 分组标签 — 应用颜色
+        grp_name = item.grp if item.grp else "其他"
+        grp_lbl = QLabel(grp_name)
+        grp_lbl.setObjectName("grpLabel")
+        if group_color:
+            grp_lbl.setStyleSheet(
+                f"font-size: 10px; color: {group_color}; background: transparent; "
+                f"border: 1px solid {group_color}; border-radius: 2px; "
+                f"padding: 0px 5px; margin-left: 2px;"
+            )
+        else:
+            grp_lbl.setStyleSheet(
+                "font-size: 10px; color: #8888a0; background: transparent; "
+                "border: 1px solid #4a4a60; border-radius: 2px; padding: 0px 5px; margin-left: 2px;"
+            )
         layout.addWidget(grp_lbl)
 
         # 删除按钮（默认隐藏）
@@ -68,7 +76,7 @@ class ItemWidget(QFrame):
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
-            self.clicked.emit(self._real_idx)
+            self.clicked.emit(self._item.id)
 
 
 class ItemsTab(QWidget):
@@ -76,7 +84,7 @@ class ItemsTab(QWidget):
 
     item_added = Signal(str, str, str)     # content, comment, grp
     item_deleted = Signal(str)        # item_id
-    item_selected = Signal(int)       # idx
+    item_selected = Signal(str)       # item_id
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -84,7 +92,8 @@ class ItemsTab(QWidget):
         # 过滤状态
         self._all_items: List[ClipItem] = []
         self._filter_text: str = ""
-        self._selected_idx: int = -1
+        self._selected_id: str = ""  # 当前选中条目的 ID
+        self._group_colors: Dict[str, str] = {}
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 8, 10, 4)
@@ -173,10 +182,13 @@ class ItemsTab(QWidget):
         self.comment_edit.clear()
         self.content_edit.setFocus()
 
-    def refresh(self, items: List[ClipItem], selected_idx: int, groups: List[str] = None, current_grp: str = ""):
+    def refresh(self, items: List[ClipItem], selected_id: str,
+                groups: List[str] = None, current_grp: str = "",
+                group_colors: Dict[str, str] = None):
         """刷新条目列表（外部调用入口）"""
         self._all_items = items
-        self._selected_idx = selected_idx
+        self._selected_id = selected_id
+        self._group_colors = group_colors or {}
 
         # 更新表单中的分组下拉框
         if groups is not None:
@@ -186,10 +198,16 @@ class ItemsTab(QWidget):
             # 表单下拉框不需要"全部"选项
             form_groups = [g for g in groups if g != "全部"]
             self.group_combo.addItems(form_groups)
-            self.group_combo.setCurrentText(cur or current_grp if current_grp != "全部" else "")
+            self.group_combo.setCurrentText(cur or (current_grp if current_grp != "全部" else ""))
             self.group_combo.blockSignals(False)
 
         self._apply_filter()
+
+    def _get_group_color(self, grp_name: str) -> str:
+        """获取分组对应的颜色"""
+        if not grp_name:
+            grp_name = "其他"
+        return self._group_colors.get(grp_name, "")
 
     def _apply_filter(self):
         """根据当前搜索文本过滤并重新渲染"""
@@ -208,12 +226,12 @@ class ItemsTab(QWidget):
         if self._filter_text:
             tokens = self._filter_text.lower().split()
             filtered = []
-            for real_idx, item in enumerate(self._all_items):
+            for item in self._all_items:
                 text = f"{item.content} {item.comment}".lower()
                 if all(token in text for token in tokens):
-                    filtered.append((real_idx, item))
+                    filtered.append(item)
         else:
-            filtered = [(i, item) for i, item in enumerate(self._all_items)]
+            filtered = list(self._all_items)
 
         if not filtered:
             self.empty_lbl.setText("没有匹配的条目")
@@ -222,17 +240,11 @@ class ItemsTab(QWidget):
 
         self.empty_lbl.setVisible(False)
 
-        # 确定过滤后的选中索引
-        filtered_selected = -1
-        if 0 <= self._selected_idx < len(self._all_items):
-            for fi, (ri, _) in enumerate(filtered):
-                if ri == self._selected_idx:
-                    filtered_selected = fi
-                    break
-
-        for filtered_i, (real_i, item) in enumerate(filtered):
-            is_selected = (filtered_i == filtered_selected)
-            item_widget = ItemWidget(item, filtered_i, real_i, is_selected)
+        for filtered_i, item in enumerate(filtered):
+            is_selected = (item.id == self._selected_id)
+            grp_name = item.grp if item.grp else "其他"
+            color = self._get_group_color(grp_name)
+            item_widget = ItemWidget(item, filtered_i, is_selected, group_color=color)
             item_widget.clicked.connect(self._on_item_clicked)
             item_widget.delete_clicked.connect(self._on_item_delete)
             self.list_layout.insertWidget(self.list_layout.count() - 1, item_widget)
@@ -242,18 +254,18 @@ class ItemsTab(QWidget):
         self._filter_text = text.strip()
         self._apply_filter()
 
-    def set_selected_index(self, idx: int):
-        """高亮选中条目（idx 为原始索引）"""
-        self._selected_idx = idx
+    def set_selected_id(self, item_id: str):
+        """高亮选中条目（按 ID）"""
+        self._selected_id = item_id
         for i in range(self.list_layout.count()):
             w = self.list_layout.itemAt(i).widget()
             if isinstance(w, ItemWidget):
-                w.setProperty("selected", "true" if w._real_idx == idx else "false")
+                w.setProperty("selected", "true" if w._item.id == item_id else "false")
                 w.style().unpolish(w)
                 w.style().polish(w)
 
-    def _on_item_clicked(self, idx: int):
-        self.item_selected.emit(idx)
+    def _on_item_clicked(self, item_id: str):
+        self.item_selected.emit(item_id)
 
     def _on_item_delete(self, item_id: str):
         self.item_deleted.emit(item_id)

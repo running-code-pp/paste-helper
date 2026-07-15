@@ -1,11 +1,14 @@
-"""设置标签页 — 透明度、快捷键、退出"""
+"""设置标签页 — 透明度、快捷键、分组颜色、导入导出、退出"""
 
+from typing import Dict, List
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QSlider, QPushButton, QRadioButton, QCheckBox
+    QSlider, QPushButton, QRadioButton, QCheckBox,
+    QScrollArea, QFrame, QColorDialog, QDialog,
+    QDialogButtonBox, QApplication,
 )
 from PySide6.QtCore import Qt, Signal, QTimer
-from PySide6.QtGui import QKeyEvent
+from PySide6.QtGui import QKeyEvent, QColor
 
 
 class HotkeyCaptureButton(QPushButton):
@@ -137,6 +140,148 @@ class HotkeyCaptureButton(QPushButton):
         self._update_text()
 
 
+class GroupSelectDialog(QDialog):
+    """导入/导出分组选择对话框"""
+
+    # 对话框专用样式
+    _DLG_QSS = {
+        "dark": """
+            GroupSelectDialog {
+                background-color: #1e1e2e;
+            }
+            QLabel {
+                color: #d0d0e0;
+                background: transparent;
+                border: none;
+                font-size: 12px;
+            }
+            QCheckBox {
+                color: #c0c0d0;
+                spacing: 8px;
+            }
+            QCheckBox::indicator {
+                width: 16px;
+                height: 16px;
+            }
+            QCheckBox::indicator:unchecked {
+                border: 1px solid #4a4a60;
+                border-radius: 3px;
+                background-color: #1a1a2e;
+            }
+            QCheckBox::indicator:checked {
+                border: 1px solid #4a7cf7;
+                border-radius: 3px;
+                background-color: #4a7cf7;
+            }
+            QPushButton {
+                border: 1px solid #3a3a50;
+                border-radius: 3px;
+                padding: 4px 12px;
+                color: #c0c0d0;
+                background-color: #2a2a3c;
+            }
+            QPushButton:hover {
+                background-color: #3a3a50;
+                border-color: #4a7cf7;
+            }
+            QDialogButtonBox QPushButton {
+                min-width: 70px;
+            }
+        """,
+        "light": """
+            GroupSelectDialog {
+                background-color: #f0f0f5;
+            }
+            QLabel {
+                color: #333340;
+                background: transparent;
+                border: none;
+                font-size: 12px;
+            }
+            QCheckBox {
+                color: #333340;
+                spacing: 8px;
+            }
+            QCheckBox::indicator {
+                width: 16px;
+                height: 16px;
+            }
+            QCheckBox::indicator:unchecked {
+                border: 1px solid #c0c0c8;
+                border-radius: 3px;
+                background-color: #ffffff;
+            }
+            QCheckBox::indicator:checked {
+                border: 1px solid #4a7cf7;
+                border-radius: 3px;
+                background-color: #4a7cf7;
+            }
+            QPushButton {
+                border: 1px solid #d0d0d8;
+                border-radius: 3px;
+                padding: 4px 12px;
+                color: #333340;
+                background-color: #ffffff;
+            }
+            QPushButton:hover {
+                background-color: #e8e8f0;
+                border-color: #4a7cf7;
+            }
+            QDialogButtonBox QPushButton {
+                min-width: 70px;
+            }
+        """,
+    }
+
+    def __init__(self, groups: List[str], title: str, parent=None, theme: str = "dark"):
+        super().__init__(parent)
+        self.setObjectName("GroupSelectDialog")
+        self.setWindowTitle(title)
+        self.setMinimumWidth(280)
+        self.setModal(True)
+
+        # 应用主题样式
+        self.setStyleSheet(self._DLG_QSS.get(theme, self._DLG_QSS["dark"]))
+
+        layout = QVBoxLayout(self)
+        layout.setSpacing(8)
+
+        hint = QLabel("选择要操作的分组（不选则操作全部）：")
+        layout.addWidget(hint)
+
+        self._checks: Dict[str, QCheckBox] = {}
+        for g in groups:
+            cb = QCheckBox(g)
+            cb.setChecked(True)
+            layout.addWidget(cb)
+            self._checks[g] = cb
+
+        # 快捷按钮行
+        btn_row = QHBoxLayout()
+        all_btn = QPushButton("全选")
+        all_btn.clicked.connect(lambda: self._set_all(True))
+        none_btn = QPushButton("全不选")
+        none_btn.clicked.connect(lambda: self._set_all(False))
+        btn_row.addWidget(all_btn)
+        btn_row.addWidget(none_btn)
+        btn_row.addStretch()
+        layout.addLayout(btn_row)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def _set_all(self, checked: bool):
+        for cb in self._checks.values():
+            cb.setChecked(checked)
+
+    def selected_groups(self) -> List[str]:
+        return [g for g, cb in self._checks.items() if cb.isChecked()]
+
+
 class SettingsTab(QWidget):
     """设置标签页"""
 
@@ -145,6 +290,9 @@ class SettingsTab(QWidget):
     next_keys_changed = Signal(str)     # "Ctrl,Down"
     theme_changed = Signal(str)         # "dark" | "light"
     auto_collapse_changed = Signal(bool)  # 点击复制后自动收起
+    group_colors_changed = Signal(dict)   # {group_name: "#rrggbb"}
+    import_clicked = Signal()            # 触发导入
+    export_clicked = Signal()            # 触发导出
     exit_clicked = Signal()
 
     def __init__(self, parent=None):
@@ -153,7 +301,18 @@ class SettingsTab(QWidget):
         self._debounce_timer.setSingleShot(True)
         self._debounce_timer.timeout.connect(self._emit_opacity)
 
-        layout = QVBoxLayout(self)
+        self._group_colors: Dict[str, str] = {}
+
+        # 外层滚动
+        outer_scroll = QScrollArea()
+        outer_scroll.setObjectName("settingsScrollArea")
+        outer_scroll.setWidgetResizable(True)
+        outer_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        outer_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        inner = QWidget()
+        inner.setObjectName("settingsInner")
+        layout = QVBoxLayout(inner)
         layout.setContentsMargins(16, 12, 16, 12)
         layout.setSpacing(12)
 
@@ -179,10 +338,7 @@ class SettingsTab(QWidget):
         layout.addLayout(opacity_row)
 
         # ===== 分隔 =====
-        sep1 = QLabel()
-        sep1.setFixedHeight(1)
-        sep1.setStyleSheet("background-color: #3a3a50; border: none;")
-        layout.addWidget(sep1)
+        layout.addWidget(self._make_sep())
 
         # ===== 上一条快捷键 =====
         prev_label = QLabel("上一条快捷键")
@@ -203,10 +359,7 @@ class SettingsTab(QWidget):
         layout.addWidget(self.next_hotkey_btn)
 
         # ===== 分隔 =====
-        sep2 = QLabel()
-        sep2.setFixedHeight(1)
-        sep2.setStyleSheet("background-color: #3a3a50; border: none;")
-        layout.addWidget(sep2)
+        layout.addWidget(self._make_sep())
 
         # ===== 主题 =====
         theme_label = QLabel("主题")
@@ -233,16 +386,81 @@ class SettingsTab(QWidget):
         layout.addLayout(theme_row)
 
         # ===== 分隔 =====
-        sep3 = QLabel()
-        sep3.setFixedHeight(1)
-        sep3.setStyleSheet("background-color: #3a3a50; border: none;")
-        layout.addWidget(sep3)
+        layout.addWidget(self._make_sep())
 
         # ===== 点击后自动收起 =====
         self.auto_collapse_cb = QCheckBox("点击复制后自动收起面板")
         self.auto_collapse_cb.setCursor(Qt.CursorShape.PointingHandCursor)
         self.auto_collapse_cb.toggled.connect(self.auto_collapse_changed.emit)
         layout.addWidget(self.auto_collapse_cb)
+
+        # ===== 分隔 =====
+        layout.addWidget(self._make_sep())
+
+        # ===== 分组颜色（可折叠） =====
+        self._color_section_header = QPushButton("▼ 分组颜色")
+        self._color_section_header.setObjectName("sectionHeader")
+        self._color_section_header.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._color_section_header.clicked.connect(self._toggle_color_section)
+        layout.addWidget(self._color_section_header)
+
+        # 分组颜色容器（包裹滚动区域 + 统一背景色）
+        self._color_section_wrap = QWidget()
+        self._color_section_wrap.setObjectName("colorSectionWrap")
+        wrap_layout = QVBoxLayout(self._color_section_wrap)
+        wrap_layout.setContentsMargins(4, 4, 4, 8)
+        wrap_layout.setSpacing(0)
+
+        self._color_scroll = QScrollArea()
+        self._color_scroll.setObjectName("colorScroll")
+        self._color_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._color_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._color_scroll.setMaximumHeight(150)
+        self._color_scroll.setWidgetResizable(True)
+
+        self._color_container = QWidget()
+        self._color_container.setObjectName("colorContainer")
+        self._color_layout = QVBoxLayout(self._color_container)
+        self._color_layout.setContentsMargins(0, 0, 0, 0)
+        self._color_layout.setSpacing(4)
+        self._color_layout.addStretch()
+        self._color_scroll.setWidget(self._color_container)
+        wrap_layout.addWidget(self._color_scroll)
+
+        self._no_group_hint = QLabel("暂无分组，添加条目后自动创建")
+        self._no_group_hint.setStyleSheet("color: #666680; font-size: 11px; border: none;")
+        self._no_group_hint.setVisible(True)
+        self._color_layout.insertWidget(0, self._no_group_hint)
+
+        layout.addWidget(self._color_section_wrap)
+
+        self._color_collapsed = False
+
+        # ===== 分隔 =====
+        layout.addWidget(self._make_sep())
+
+        # ===== 导入导出 =====
+        io_label = QLabel("数据管理")
+        io_label.setStyleSheet("color: #8888a0; font-size: 12px; border: none;")
+        layout.addWidget(io_label)
+
+        io_row = QHBoxLayout()
+        io_row.setSpacing(10)
+
+        self.import_btn = QPushButton("📥 导入CSV")
+        self.import_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.import_btn.setObjectName("ioBtn")
+        self.import_btn.clicked.connect(self.import_clicked.emit)
+        io_row.addWidget(self.import_btn)
+
+        self.export_btn = QPushButton("📤 导出CSV")
+        self.export_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.export_btn.setObjectName("ioBtn")
+        self.export_btn.clicked.connect(self.export_clicked.emit)
+        io_row.addWidget(self.export_btn)
+
+        io_row.addStretch()
+        layout.addLayout(io_row)
 
         layout.addStretch()
 
@@ -258,6 +476,30 @@ class SettingsTab(QWidget):
         exit_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         exit_btn.clicked.connect(self.exit_clicked.emit)
         layout.addWidget(exit_btn)
+
+        outer_scroll.setWidget(inner)
+
+        # 顶层布局
+        outer_layout = QVBoxLayout(self)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.addWidget(outer_scroll)
+
+    def _make_sep(self) -> QLabel:
+        sep = QLabel()
+        sep.setFixedHeight(1)
+        sep.setStyleSheet("background-color: #3a3a50; border: none;")
+        return sep
+
+    # ===== 分组颜色折叠 =====
+
+    def _toggle_color_section(self):
+        """折叠/展开分组颜色区域"""
+        self._color_collapsed = not self._color_collapsed
+        self._color_section_wrap.setVisible(not self._color_collapsed)
+        arrow = "▶" if self._color_collapsed else "▼"
+        self._color_section_header.setText(f"{arrow} 分组颜色")
+
+    # ===== 公开设置方法 =====
 
     def set_opacity(self, value: int):
         self.opacity_slider.blockSignals(True)
@@ -279,6 +521,98 @@ class SettingsTab(QWidget):
         self.auto_collapse_cb.blockSignals(True)
         self.auto_collapse_cb.setChecked(enabled)
         self.auto_collapse_cb.blockSignals(False)
+
+    def set_groups(self, groups: List[str]):
+        """更新分组列表（排除"全部"）"""
+        # 清除旧的颜色行（保留 stretch 和 hint）
+        for i in reversed(range(self._color_layout.count())):
+            w = self._color_layout.itemAt(i).widget()
+            if w and w is not self._no_group_hint:
+                w.deleteLater()
+
+        filtered = [g for g in groups if g != "全部"]
+        if not filtered:
+            self._no_group_hint.setVisible(True)
+            return
+
+        self._no_group_hint.setVisible(False)
+        for grp_name in filtered:
+            row = self._make_color_row(grp_name)
+            self._color_layout.insertWidget(self._color_layout.count() - 1, row)
+
+    def set_group_colors(self, colors: Dict[str, str]):
+        """设置分组颜色"""
+        self._group_colors = colors
+        self._refresh_color_buttons()
+
+    def _make_color_row(self, grp_name: str) -> QWidget:
+        row = QWidget()
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(0, 2, 0, 2)
+        layout.setSpacing(8)
+
+        name_lbl = QLabel(grp_name)
+        name_lbl.setMinimumWidth(60)
+        name_lbl.setStyleSheet("color: #c0c0d0; border: none;")
+        layout.addWidget(name_lbl)
+
+        color = self._group_colors.get(grp_name, "#8888a0")
+        color_btn = QPushButton()
+        color_btn.setObjectName("colorBtn")
+        color_btn.setFixedSize(28, 28)
+        color_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        color_btn.setToolTip(f"{grp_name} 的颜色 — 点击修改")
+        self._set_btn_color(color_btn, QColor(color))
+        color_btn.clicked.connect(lambda checked=False, g=grp_name, b=color_btn: self._pick_color(g, b))
+        layout.addWidget(color_btn)
+
+        # 重置按钮
+        reset_btn = QPushButton("默认")
+        reset_btn.setFixedSize(40, 24)
+        reset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        reset_btn.setToolTip(f"恢复 {grp_name} 的默认颜色")
+        reset_btn.clicked.connect(lambda checked=False, g=grp_name: self._reset_color(g))
+        layout.addWidget(reset_btn)
+
+        layout.addStretch()
+        return row
+
+    @staticmethod
+    def _set_btn_color(btn: QPushButton, color: QColor):
+        btn.setStyleSheet(
+            f"QPushButton {{ background-color: {color.name()}; "
+            f"border: 1px solid {color.darker(120).name()}; border-radius: 4px; }}"
+            f"QPushButton:hover {{ border: 2px solid #ffffff; }}"
+        )
+
+    def _pick_color(self, grp_name: str, btn: QPushButton):
+        current = self._group_colors.get(grp_name, "#8888a0")
+        color = QColorDialog.getColor(QColor(current), self, f"选择 {grp_name} 的颜色")
+        if color.isValid():
+            self._group_colors[grp_name] = color.name()
+            self._set_btn_color(btn, color)
+            self.group_colors_changed.emit(dict(self._group_colors))
+
+    def _reset_color(self, grp_name: str):
+        if grp_name in self._group_colors:
+            del self._group_colors[grp_name]
+        self.group_colors_changed.emit(dict(self._group_colors))
+        self._refresh_color_buttons()
+
+    def _refresh_color_buttons(self):
+        """刷新所有颜色按钮"""
+        for i in range(self._color_layout.count()):
+            w = self._color_layout.itemAt(i).widget()
+            if w and w is not self._no_group_hint:
+                # 找到 color_btn（第二个子控件）
+                row_layout = w.layout()
+                if row_layout and row_layout.count() >= 2:
+                    name_lbl = row_layout.itemAt(0).widget()
+                    color_btn = row_layout.itemAt(1).widget()
+                    if isinstance(name_lbl, QLabel) and isinstance(color_btn, QPushButton):
+                        grp_name = name_lbl.text()
+                        color = self._group_colors.get(grp_name, "#8888a0")
+                        self._set_btn_color(color_btn, QColor(color))
 
     # ===== 透明度 150ms 防抖 =====
     _pending_opacity = 85

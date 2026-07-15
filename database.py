@@ -48,6 +48,7 @@ def init_db():
         "theme": "dark",
         "window_width": "420",
         "auto_collapse": "0",
+        "group_colors": "{}",
     }
     for k, v in defaults.items():
         conn.execute(
@@ -99,6 +100,33 @@ def update_item(item_id: str, content: str, comment: str):
     conn.close()
 
 
+def update_item_group(item_id: str, grp: str):
+    """更新条目的分组"""
+    conn = _get_conn()
+    conn.execute("UPDATE items SET grp = ? WHERE id = ?", (grp, item_id))
+    conn.commit()
+    conn.close()
+
+
+def import_items(items: list) -> int:
+    """批量导入条目，返回导入数量。每条为 (content, comment, grp)"""
+    conn = _get_conn()
+    import uuid as _uuid
+    import time as _time
+    count = 0
+    for content, comment, grp in items:
+        item_id = str(_uuid.uuid4())
+        now = int(_time.time())
+        conn.execute(
+            "INSERT INTO items(id, grp, content, comment, created_at) VALUES(?, ?, ?, ?, ?)",
+            (item_id, grp, content, comment, now)
+        )
+        count += 1
+    conn.commit()
+    conn.close()
+    return count
+
+
 # ---------- 设置操作 ----------
 
 def get_settings() -> AppSettings:
@@ -115,6 +143,7 @@ def get_settings() -> AppSettings:
         theme=kv.get("theme", "dark"),
         window_width=int(kv.get("window_width", "420")),
         auto_collapse=kv.get("auto_collapse", "0") == "1",
+        group_colors=AppSettings.parse_group_colors(kv.get("group_colors", "{}")),
     )
 
 

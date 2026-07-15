@@ -199,6 +199,12 @@ QScrollArea > QWidget {
     background-color: #1e1e2e;
 }
 
+/* ===== 设置页滚动区域 ===== */
+#settingsScrollArea, #settingsScrollArea > QWidget, #settingsInner {
+    background-color: #1e1e2e;
+    border: none;
+}
+
 /* ===== 滚动条 ===== */
 QScrollBar:vertical {
     background-color: #1a1a2e;
@@ -280,7 +286,7 @@ QToolTip {
 }
 
 #itemWidget QLabel {
-    color: #8888a0;
+    color: #c0c0d0;
     border: none;
     background: transparent;
 }
@@ -299,6 +305,50 @@ QToolTip {
     border-color: #4a7cf7;
     color: #d0d0e0;
     background-color: #2a2a4c;
+}
+
+/* ===== 设置页折叠标题 ===== */
+#sectionHeader {
+    background: transparent;
+    border: none;
+    color: #8888a0;
+    font-size: 12px;
+    text-align: left;
+    padding: 2px 0px;
+}
+
+#sectionHeader:hover {
+    color: #c0c0d0;
+}
+
+/* ===== 分组颜色区域 ===== */
+#colorSectionWrap {
+    background-color: #222233;
+    border-radius: 4px;
+    border: 1px solid #2a2a40;
+}
+
+#colorScroll, #colorScroll > QWidget {
+    background-color: #222233;
+    border: none;
+}
+
+#colorContainer {
+    background-color: #222233;
+}
+
+/* ===== 导入导出按钮 ===== */
+#ioBtn {
+    background-color: #2a2a3c;
+    color: #c0c0d0;
+    border: 1px solid #3a3a50;
+    border-radius: 4px;
+    padding: 6px 14px;
+}
+
+#ioBtn:hover {
+    background-color: #3a3a50;
+    border-color: #4a7cf7;
 }
 """
 
@@ -501,6 +551,12 @@ QScrollArea > QWidget {
     background-color: #f0f0f5;
 }
 
+/* ===== 设置页滚动区域 ===== */
+#settingsScrollArea, #settingsScrollArea > QWidget, #settingsInner {
+    background-color: #f0f0f5;
+    border: none;
+}
+
 /* ===== 滚动条 ===== */
 QScrollBar:vertical {
     background-color: #f0f0f5;
@@ -582,7 +638,7 @@ QToolTip {
 }
 
 #itemWidget QLabel {
-    color: #666680;
+    color: #5a5a70;
     border: none;
     background: transparent;
 }
@@ -601,5 +657,49 @@ QToolTip {
     border-color: #4a7cf7;
     color: #333340;
     background-color: #e0e5ff;
+}
+
+/* ===== 设置页折叠标题 ===== */
+#sectionHeader {
+    background: transparent;
+    border: none;
+    color: #666680;
+    font-size: 12px;
+    text-align: left;
+    padding: 2px 0px;
+}
+
+#sectionHeader:hover {
+    color: #333340;
+}
+
+/* ===== 分组颜色区域 ===== */
+#colorSectionWrap {
+    background-color: #e8e8f0;
+    border-radius: 4px;
+    border: 1px solid #d8d8e0;
+}
+
+#colorScroll, #colorScroll > QWidget {
+    background-color: #e8e8f0;
+    border: none;
+}
+
+#colorContainer {
+    background-color: #e8e8f0;
+}
+
+/* ===== 导入导出按钮 ===== */
+#ioBtn {
+    background-color: #ffffff;
+    color: #333340;
+    border: 1px solid #d0d0d8;
+    border-radius: 4px;
+    padding: 6px 14px;
+}
+
+#ioBtn:hover {
+    background-color: #e8e8f0;
+    border-color: #4a7cf7;
 }
 """
